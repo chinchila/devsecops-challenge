@@ -28,3 +28,10 @@ skip-check:
   - CKV_GCP_68
   # This is a false positive, metadata is enabled in the node pool
   - CKV_GCP_69
+  # This tells us to not use k8s secrets as env variables, we use a secrets operator
+  # the risk is very low in this case and under very specific configurations
+  # its different then mounting the secret as file.
+  - CKV_K8S_35
+
+skip-path:
+  - k8s/security/kube-bench-job.yaml
