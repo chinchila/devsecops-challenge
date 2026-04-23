@@ -13,6 +13,12 @@ resource "google_compute_subnetwork" "nodes" {
 
   private_ip_google_access = true
 
+  log_config {
+    aggregation_interval = "INTERVAL_10_MIN"
+    flow_sampling        = 0.5
+    metadata             = "INCLUDE_ALL_METADATA"
+  }
+
   secondary_ip_range {
     range_name    = "pods"
     ip_cidr_range = "10.4.0.0/14"
@@ -131,6 +137,9 @@ resource "google_container_cluster" "primary" {
     disk_type    = "pd-standard"   # standard HDD - not counted against pd-ssd quota
     disk_size_gb = 30
     machine_type = "e2-medium"
+    workload_metadata_config {
+      node_metadata = "GKE_METADATA_SERVER"
+    }
   }
 
   network    = google_compute_network.vpc.id
@@ -139,6 +148,12 @@ resource "google_container_cluster" "primary" {
   ip_allocation_policy {
     cluster_secondary_range_name  = "pods"
     services_secondary_range_name = "services"
+  }
+
+  resource_labels = {
+    environment = "production"
+    team        = "security"
+    managedBy   = "terraform"
   }
 
   # Private cluster - nodes have no public IPs

@@ -1,10 +1,10 @@
 resource "google_sql_database_instance" "infisical" {
   project          = var.project_id
   name             = "infisical-pg"
-  database_version = "POSTGRES_15"
+  database_version = "POSTGRES_18"
   region           = var.region
 
-  deletion_protection = false
+  deletion_protection = false # Change in case of production
 
   settings {
     tier              = var.db_tier
@@ -21,7 +21,8 @@ resource "google_sql_database_instance" "infisical" {
     ip_configuration {
       ipv4_enabled    = false
       private_network = var.vpc_network_id
-      ssl_mode = "ENCRYPTED_ONLY"
+      ssl_mode        = "ENCRYPTED_ONLY"
+      require_ssl     = true
     }
 
     database_flags {
@@ -31,6 +32,46 @@ resource "google_sql_database_instance" "infisical" {
 
     database_flags {
       name  = "log_disconnections"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_duration"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_statement"
+      value = "all"
+    }
+
+    database_flags {
+      name  = "log_hostname"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_min_messages"
+      value = "error" 
+    }
+
+    database_flags {
+      name  = "log_min_error_statement"
+      value = "error"
+    }
+
+    database_flags {
+      name  = "log_lock_waits"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_checkpoints"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "cloudsql.enable_pgaudit"
       value = "on"
     }
   }

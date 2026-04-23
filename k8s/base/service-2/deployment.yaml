@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: service-2
-          image: REGISTRY/devsecops-challenge:TAG
+          image: ghcr.io/chinchila/devsecops-challenge:latest
           env:
             - name: SERVICE
               value: "service-2"

@@ -41,7 +41,7 @@ spec:
 
       containers:
         - name: service-1
-          image: REGISTRY/devsecops-challenge:TAG  # replaced by Argo CD image updater
+          image: ghcr.io/chinchila/devsecops-challenge:latest  # replaced by Argo CD image updater
           env:
             - name: SERVICE
               value: "service-1"

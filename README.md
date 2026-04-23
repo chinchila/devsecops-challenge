@@ -213,8 +213,8 @@ argocd app sync service-1 service-2 service-3
 
 ```bash
 # O CI faz isso automaticamente; para bootstrap manual:
-docker build -t ghcr.io/chinchila/devsecops-challenge:initial .
-docker push ghcr.io/chinchila/devsecops-challenge:initial
+docker build -t ghcr.io/chinchila/devsecops-challenge:latest .
+docker push ghcr.io/chinchila/devsecops-challenge:latest
 
 # Atualize as tags nos manifestos e faça commit → Argo CD sincroniza
 ```
