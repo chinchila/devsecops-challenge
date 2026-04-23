@@ -28,3 +28,4 @@ db_tier = "db-f1-micro"
 # Passwords will be prompted and this should be
 # argocd_admin_password_bcrypt: htpasswd -nbBC 10 '' 'your-password' | tr -d ':\n' | sed 's/^!//'
 # infisical_db_password: openssl rand -base64 24
+# 

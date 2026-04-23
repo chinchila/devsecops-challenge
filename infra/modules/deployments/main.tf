@@ -60,7 +60,12 @@ resource "kubernetes_namespace" "app" {
     name = each.key
     labels = {
       "istio-injection"                    = "enabled"
-      "pod-security.kubernetes.io/enforce" = "baseline"
+      # enforce=privileged required: istio-init needs NET_ADMIN+NET_RAW+root for
+      # iptables setup. Incompatible with restricted/baseline PSS profiles.
+      # ADVANCED_DATAPATH prevents use of Istio CNI as workaround.
+      # App container security enforced via explicit securityContext in manifests.
+      # See THREAT_MODEL.md R-08 for full analysis.
+      "pod-security.kubernetes.io/enforce" = "privileged"
       "pod-security.kubernetes.io/warn"    = "restricted"
       "pod-security.kubernetes.io/audit"   = "restricted"
     }
@@ -92,6 +97,30 @@ resource "helm_release" "istiod" {
         meshID   = "mesh1"
         multiCluster = { clusterName = var.cluster_name }
         network  = var.cluster_name
+        # istio-proxy sidecar non-root, no capabilities needed
+        proxy = {
+          securityContext = {
+            allowPrivilegeEscalation = false
+            runAsNonRoot             = true
+            runAsUser                = 1337
+            runAsGroup               = 1337
+            capabilities = {
+              drop = ["ALL"]
+            }
+          }
+        }
+        # istio-init only NET_ADMIN + NET_RAW for iptables, everything else dropped
+        proxy_init = {
+          securityContext = {
+            allowPrivilegeEscalation = false
+            runAsNonRoot             = false
+            runAsUser                = 0
+            capabilities = {
+              add  = ["NET_ADMIN", "NET_RAW"]
+              drop = ["ALL"]
+            }
+          }
+        }
       }
       meshConfig = {
         # Require mTLS for all services in the mesh
