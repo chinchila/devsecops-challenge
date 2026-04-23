@@ -22,7 +22,6 @@ resource "google_sql_database_instance" "infisical" {
       ipv4_enabled    = false
       private_network = var.vpc_network_id
       ssl_mode        = "ENCRYPTED_ONLY"
-      require_ssl     = true
     }
 
     database_flags {

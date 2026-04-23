@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Run Checkov on Terraform
-        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.3099.0
+        uses: bridgecrewio/checkov-action@3203f966a7ccd680cd8f6aaa3c3c5b0b3e9afa32 # checkov v3.2.524
         with:
           directory: infra/
           framework: terraform
@@ -47,7 +47,7 @@ jobs:
           output_file_path: checkov-tf.sarif
 
       - name: Run Checkov on Kubernetes manifests
-        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.3099.0
+        uses: bridgecrewio/checkov-action@3203f966a7ccd680cd8f6aaa3c3c5b0b3e9afa32 # checkov v3.2.524
         with:
           directory: k8s/
           framework: kubernetes
