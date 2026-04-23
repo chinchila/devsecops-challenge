@@ -1,0 +1,119 @@
+# Argo CD Application CRDs
+# These make Argo CD the single source of truth for all service deployments.
+# The CI pipeline updates image tags in k8s/base/<service>/deployment.yaml
+# and pushes to main - Argo CD auto-syncs from there.
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: service-1
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/chinchila/devsecops-challenge  # replace
+    targetRevision: main
+    path: k8s/base/service-1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: service-1
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false  # namespaces managed by Terraform
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: service-2
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/chinchila/devsecops-challenge  # replace
+    targetRevision: main
+    path: k8s/base/service-2
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: service-2
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: service-3
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/chinchila/devsecops-challenge  # replace
+    targetRevision: main
+    path: k8s/base/service-3
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: service-3
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
+---
+# Security controls as an Argo CD app too (GitOps all the way)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: security-controls
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/chinchila/devsecops-challenge  # replace
+    targetRevision: main
+    path: k8s/security
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true

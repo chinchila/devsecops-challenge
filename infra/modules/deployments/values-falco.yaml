@@ -1,0 +1,31 @@
+driver:
+  kind: "modern_ebpf"
+
+falco:
+  json_output: true
+  log_stderr: true
+  log_syslog: false
+  # Load custom rules from ConfigMap
+  rules_files:
+    - "/etc/falco/falco_rules.yaml"
+    - "/etc/falco/falco_rules.local.yaml"
+    - "/etc/falco/custom_rules.yaml"
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+# Mount custom rules ConfigMap
+extraVolumes:
+  - name: "custom-rules"
+    configMap:
+      name: "falco-custom-rules"
+
+extraVolumeMounts:
+  - name: "custom-rules"
+    mountPath: "/etc/falco/custom_rules.yaml"
+    subPath: "custom_rules.yaml"

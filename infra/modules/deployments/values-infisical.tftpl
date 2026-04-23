@@ -1,0 +1,23 @@
+infisical:
+  image:
+    repository: "infisical/infisical"
+    tag: "v0.159.19"
+    pullPolicy: "IfNotPresent"
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "2048Mi"
+
+ingress:
+  enabled: false
+  hostName: "localhost"
+  ingressClassName: "nginx"
+  nginx:
+    enabled: false
+
+postgresql:
+  enabled: false

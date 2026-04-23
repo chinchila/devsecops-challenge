@@ -1,0 +1,157 @@
+# Istio Gateway + VirtualService definitions
+# Controls how external traffic enters the mesh for service-1 and service-3.
+# service-2 is internal only - no Gateway entry.
+
+---
+# ── Gateway: TLS termination at the ingress ──────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: app-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    # HTTPS on port 443 - TLS terminated here, mTLS continues inside the mesh
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        # credentialName references a TLS Secret in istio-system namespace.
+        # In production: use cert-manager + Let's Encrypt or GCP Managed Certs.
+        # For dev/demo: kubectl create secret tls app-tls --cert=... --key=... -n istio-system
+        credentialName: app-tls
+      hosts:
+        - "service-1.example.com"
+        - "service-3.example.com"
+    # HTTP → HTTPS redirect
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      tls:
+        httpsRedirect: true
+      hosts:
+        - "service-1.example.com"
+        - "service-3.example.com"
+
+---
+# ── VirtualService: route to service-1 ───────────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: service-1
+  namespace: service-1
+spec:
+  hosts:
+    - "service-1.example.com"
+  gateways:
+    - istio-system/app-gateway
+  http:
+    - match:
+        - uri:
+            prefix: "/"
+      route:
+        - destination:
+            host: service-1.service-1.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 3s
+        retryOn: "5xx,reset,connect-failure"
+
+---
+# ── VirtualService: route to service-3 ───────────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: service-3
+  namespace: service-3
+spec:
+  hosts:
+    - "service-3.example.com"
+  gateways:
+    - istio-system/app-gateway
+  http:
+    - match:
+        - uri:
+            prefix: "/"
+      route:
+        - destination:
+            host: service-3.service-3.svc.cluster.local
+            port:
+              number: 8080
+      timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 3s
+        retryOn: "5xx,reset,connect-failure"
+
+---
+# ── DestinationRule: enforce mTLS for each service ───────────────────────────
+# Even with global PeerAuthentication STRICT, DestinationRules make the
+# client-side mTLS explicit and allow per-service circuit breaker config.
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: service-1-mtls
+  namespace: service-1
+spec:
+  host: service-1.service-1.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: service-2-mtls
+  namespace: service-2
+spec:
+  host: service-2.service-2.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: service-3-mtls
+  namespace: service-3
+spec:
+  host: service-3.service-3.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: UPGRADE
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s

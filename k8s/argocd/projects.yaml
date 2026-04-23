@@ -1,0 +1,106 @@
+# Argo CD AppProject - confines what the app Applications can deploy
+# Principle of least privilege: each Application can only affect its own namespace.
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: services
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Application services - service-1, service-2, service-3"
+
+  # Only this repo is a valid source
+  sourceRepos:
+    - "https://github.com/chinchila/devsecops-challenge"
+
+  # Applications in this project can only deploy to these namespaces
+  destinations:
+    - namespace: service-1
+      server: https://kubernetes.default.svc
+    - namespace: service-2
+      server: https://kubernetes.default.svc
+    - namespace: service-3
+      server: https://kubernetes.default.svc
+
+  # Allowed resource kinds - deny ClusterRole, ClusterRoleBinding, etc.
+  namespaceResourceWhitelist:
+    - group: "apps"
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: ""
+      kind: ConfigMap
+    - group: "autoscaling"
+      kind: HorizontalPodAutoscaler
+    - group: "secrets.infisical.com"
+      kind: InfisicalSecret
+    - group: "networking.k8s.io"
+      kind: NetworkPolicy
+
+  # Explicitly deny cluster-scoped resources from this project
+  clusterResourceBlacklist:
+    - group: ""
+      kind: Node
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
+
+  # Sync windows - optional: restrict deploys to business hours
+  # Uncomment to enable:
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: "* 8-18 * * 1-5"  # Mon-Fri 08:00-18:00
+  #     duration: 10h
+  #     applications: ["*"]
+
+---
+# Security controls project - separate from app deployments
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: security
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Security controls - NetworkPolicy, Istio policies, Falco rules"
+
+  sourceRepos:
+    - "https://github.com/chinchila/devsecops-challenge"
+
+  destinations:
+    - namespace: "*"
+      server: https://kubernetes.default.svc
+
+  # Security project can manage cross-namespace policies
+  clusterResourceWhitelist:
+    - group: "security.istio.io"
+      kind: PeerAuthentication
+    - group: "security.istio.io"
+      kind: AuthorizationPolicy
+    - group: "security.istio.io"
+      kind: RequestAuthentication
+
+  namespaceResourceWhitelist:
+    - group: "networking.k8s.io"
+      kind: NetworkPolicy
+    - group: "security.istio.io"
+      kind: AuthorizationPolicy
+    - group: "security.istio.io"
+      kind: PeerAuthentication
+    - group: "networking.istio.io"
+      kind: Gateway
+    - group: "networking.istio.io"
+      kind: VirtualService
+    - group: "networking.istio.io"
+      kind: DestinationRule
+    - group: ""
+      kind: ConfigMap
+    - group: "batch"
+      kind: Job

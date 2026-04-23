@@ -1,0 +1,212 @@
+name: CI - Security Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write        # push to GHCR
+  id-token: write        # OIDC for Cosign keyless (fallback)
+  security-events: write # upload SARIF to GitHub Security
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  secret-detection:
+    name: "Secret Scanning"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0  # gitleaks needs full git history
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  iac-scanning:
+    name: "Gate 2 · Checkov - IaC Misconfigurations"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run Checkov on Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/
+          framework: terraform
+          # Fail on CRITICAL and HIGH - pipeline blocks on any finding above threshold
+          soft_fail: false
+          output_format: sarif
+          output_file_path: checkov-tf.sarif
+          # Documented exceptions (e.g. binary_authorization=DISABLED is a known residual risk)
+          skip_check: CKV_GCP_25  # Binary Authorization - documented in THREAT_MODEL.md
+
+      - name: Run Checkov on Kubernetes manifests
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: k8s/
+          framework: kubernetes
+          soft_fail: false
+          output_format: sarif
+          output_file_path: checkov-k8s.sarif
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-tf.sarif
+
+  scan-insecure-image:
+    name: "Trivy - Insecure Image"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build insecure image
+        run: docker build -f insecure.Dockerfile -t insecure-test:ci .
+
+      - name: Trivy scan - must find CRITICAL CVEs (demo gate)
+        id: trivy-insecure
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: insecure-test:ci
+          format: table
+          exit-code: "1"        # FAIL if CRITICAL found - this is the expected behaviour
+          severity: CRITICAL
+          vuln-type: "os,library"
+        continue-on-error: true  # we WANT this to fail; next step validates it
+
+      - name: Verify insecure image was blocked
+        run: |
+          if [ "${{ steps.trivy-insecure.outcome }}" != "failure" ]; then
+            echo "ERROR: insecure.Dockerfile did not produce CRITICAL CVEs - check base image"
+            exit 1
+          fi
+          echo "✓ Pipeline correctly blocked insecure image (CRITICAL CVEs detected)"
+
+  scan-prod-image:
+    name: "Trivy - Production Image"
+    runs-on: ubuntu-latest
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build production image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan - production image (FAIL on CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: sarif
+          output: trivy-prod.sarif
+          exit-code: "1"        # Hard fail on CRITICAL
+          severity: CRITICAL
+          vuln-type: "os,library"
+          # If a CRITICAL is justified (e.g. no fix available), document in
+          # .trivyignore and add comment referencing THREAT_MODEL.md residual risk
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-prod.sarif
+  sign-image:
+    name: "Cosign - Sign Production Image"
+    runs-on: ubuntu-latest
+    needs: [secret-detection, iac-scanning, scan-prod-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign image with Cosign (private key from GitHub Secret)
+        # COSIGN_PRIVATE_KEY is stored in GitHub Actions Secrets - never in repo.
+        # The key was generated with: cosign generate-key-pair
+        # Private key is also stored in Infisical under path /ci/cosign-private-key
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          echo "${COSIGN_PRIVATE_KEY}" > /tmp/cosign.key
+          cosign sign --key /tmp/cosign.key \
+            --yes \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          rm -f /tmp/cosign.key
+
+      - name: Verify signature
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          echo "${COSIGN_PUBLIC_KEY}" > /tmp/cosign.pub
+          cosign verify --key /tmp/cosign.pub \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          rm -f /tmp/cosign.pub
+
+  update-manifests:
+    name: "Update image tags and trigger Argo CD"
+    runs-on: ubuntu-latest
+    needs: [sign-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ secrets.GIT_BOT_TOKEN }}  # PAT with repo write access
+
+      - name: Update image tag in manifests
+        run: |
+          NEW_TAG="${{ github.sha }}"
+          REGISTRY="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+          for svc in service-1 service-2 service-3; do
+            sed -i "s|image: .*devsecops-challenge:.*|image: ${REGISTRY}:${NEW_TAG}|g" \
+              k8s/base/${svc}/deployment.yaml
+          done
+
+      - name: Commit and push updated manifests
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add k8s/base/*/deployment.yaml
+          git diff --staged --quiet || \
+            git commit -m "ci: update image tags to ${{ github.sha }} [skip ci]"
+          git push
+        # Argo CD watches main and will auto-sync after this push.

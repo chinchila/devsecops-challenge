@@ -1,0 +1,134 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-1
+  namespace: service-1
+  annotations:
+    # Workload Identity: bind this k8s SA to the GCP SA
+    iam.gke.io/gcp-service-account: WORKLOAD_SA_EMAIL  # replaced by Terraform/CI
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-1
+  namespace: service-1
+  labels:
+    app: service-1
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: service-1
+  template:
+    metadata:
+      labels:
+        app: service-1
+        version: v1
+    spec:
+      serviceAccountName: service-1
+      automountServiceAccountToken: false  # mounted explicitly via projected volume if needed
+
+      # PSS restricted compliance
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: service-1
+          image: REGISTRY/devsecops-challenge:TAG  # replaced by Argo CD image updater
+          env:
+            - name: SERVICE
+              value: "service-1"
+            - name: SERVICE_2_URL
+              value: "http://service-2.service-2.svc.cluster.local:8080"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: service-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-1
+  namespace: service-1
+  labels:
+    app: service-1
+spec:
+  selector:
+    app: service-1
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: service-1
+  namespace: service-1
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: service-1
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

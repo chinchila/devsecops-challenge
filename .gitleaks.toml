@@ -1,0 +1,45 @@
+title = "devsecops-challenge gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id          = "jwt-secret-value"
+description = "Detects potential JWT_SECRET values hardcoded (not just the key name)"
+regex       = '''(?i)JWT_SECRET\s*[=:]\s*["']?[A-Za-z0-9+/=_\-]{16,}["']?'''
+tags        = ["secret", "jwt"]
+
+[[rules]]
+id          = "cosign-private-key"
+description = "Detects Cosign/PEM private key material in files"
+regex       = '''-----BEGIN (EC |RSA |ENCRYPTED )?PRIVATE KEY-----'''
+tags        = ["secret", "cosign", "pem"]
+
+[[rules]]
+id          = "infisical-client-secret"
+description = "Detects Infisical machine identity client secrets"
+regex       = '''(?i)clientSecret\s*[=:]\s*["']?[A-Za-z0-9_\-\.]{20,}["']?'''
+tags        = ["secret", "infisical"]
+
+[[rules]]
+id          = "gcp-service-account-key"
+description = "GCP service account JSON key"
+regex       = '''"private_key":\s*"-----BEGIN PRIVATE KEY-----'''
+tags        = ["secret", "gcp"]
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+  # Test fixtures and example files are allowed to contain placeholder values
+  '''(?i)terraform\.tfvars\.example''',
+  '''(?i)\.gitleaks\.toml''',
+  # Go binary outputs
+  '''(?i)\.git/''',
+]
+regexes = [
+  # Allow placeholder patterns (e.g. REPLACE_ME, YOUR_VALUE)
+  '''REPLACE(ME|_WITH|_THIS)''',
+  '''YOUR_(VALUE|PASSWORD|KEY|SECRET|ORG)''',
+  # Allow bcrypt hash examples in docs
+  '''\$2[aby]\$\d+\$REPLACEME''',
+]

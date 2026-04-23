@@ -1,0 +1,129 @@
+# Istio security policies
+# Layer: L7 (complements NetworkPolicy at L3/L4)
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth-service-1
+  namespace: service-1
+spec:
+  selector:
+    matchLabels:
+      app: service-1
+  jwtRules:
+    - issuer: "https://accounts.google.com" # Replace with your actual issuer
+      jwksUri: "https://www.googleapis.com/oauth2/v3/certs"
+      forwardOriginalToken: false
+---
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth-service-3
+  namespace: service-3
+spec:
+  selector:
+    matchLabels:
+      app: service-3
+  jwtRules:
+    - issuer: "https://accounts.google.com"   # Replace with your actual issuer
+      jwksUri: "https://www.googleapis.com/oauth2/v3/certs"
+      forwardOriginalToken: false
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: istio-system
+spec: {}  # Empty spec = deny all in the root namespace
+
+---
+# service-1: allow ingress from gateway (JWT must be valid)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress
+  namespace: service-1
+spec:
+  selector:
+    matchLabels:
+      app: service-1
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway"]
+      when:
+        - key: request.auth.claims[iss]
+          values: ["https://accounts.google.com"]
+
+---
+# service-2: allow only service-1 (mTLS principal check at L7)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-from-service-1
+  namespace: service-2
+spec:
+  selector:
+    matchLabels:
+      app: service-2
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/service-1/sa/service-1"]
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/"]
+
+---
+# service-3: allow ingress from gateway (JWT must be valid); deny service-1 and service-2
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress
+  namespace: service-3
+spec:
+  selector:
+    matchLabels:
+      app: service-3
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway"]
+      when:
+        - key: request.auth.claims[iss]
+          values: ["https://accounts.google.com"]
+
+---
+# Explicitly DENY service-1 and service-2 from reaching service-3 (defense in depth)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-lateral-movement
+  namespace: service-3
+spec:
+  selector:
+    matchLabels:
+      app: service-3
+  action: DENY
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/service-1/sa/service-1"
+              - "cluster.local/ns/service-2/sa/service-2"

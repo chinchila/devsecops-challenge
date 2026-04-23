@@ -1,0 +1,30 @@
+# terraform.tfvars.example
+# Copy to terraform.tfvars and fill in values.
+# NEVER commit terraform.tfvars - it is in .gitignore.
+#
+# Usage:
+#   cp terraform.tfvars.example terraform.tfvars
+#   # edit values below
+#   terraform apply -var-file=terraform.tfvars
+
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+
+cluster_name           = "devsecops-challenge"
+node_pool_machine_type = "e2-standard-2"
+node_pool_min_count    = 1
+node_pool_max_count    = 1
+
+# Restrict to your egress IP: $(curl -s ifconfig.me)/32
+# IMPORTANT: 0.0.0.0/0 is the default but must be narrowed before production use.
+# See THREAT_MODEL.md T-NET-03 and Residual Risk R-01.
+master_authorized_cidr = "0.0.0.0/0"
+
+image_registry = "ghcr.io/chinchila/devsecops-challenge"
+image_tag      = "latest"
+
+db_tier = "db-f1-micro"
+
+# Passwords will be prompted and this should be
+# argocd_admin_password_bcrypt: htpasswd -nbBC 10 '' 'your-password' | tr -d ':\n' | sed 's/^!//'
+# infisical_db_password: openssl rand -base64 24

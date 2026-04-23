@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-custom-rules
+  namespace: falco
+data:
+  custom_rules.yaml: |
+    # Each rule references the threat it mitigates (see THREAT_MODEL.md)
+
+    # THREAT: Runtime exploitation - attacker executes shell inside app container
+    # MITIGATES: T-RT-01 (Container escape via shell execution)
+    - rule: Shell Executed in App Container
+      desc: >
+        Detects execution of sh, bash, or dash inside any container in the
+        service-1, service-2, or service-3 namespaces. Distroless containers
+        have no shell - any match indicates process injection or image tampering.
+      condition: >
+        spawned_process and
+        proc.name in (shell_binaries) and
+        k8s.ns.name in (service-1, service-2, service-3)
+      output: >
+        Shell executed in app container
+        (user=%user.name user_uid=%user.uid command=%proc.cmdline
+         pid=%proc.pid parent=%proc.pname
+         container=%container.name image=%container.image.repository
+         ns=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [container, shell, mitre_execution, T-RT-01]
+
+    # THREAT: Credential access - attacker reads sensitive system files
+    # MITIGATES: T-RT-02 (Credential theft from /etc/passwd, /etc/shadow)
+    - rule: Sensitive File Read in App Container
+      desc: >
+        Detects read of /etc/passwd, /etc/shadow, /proc/*/environ or similar
+        credential files from within the application namespaces.
+      condition: >
+        open_read and
+        fd.name in (/etc/passwd, /etc/shadow, /etc/gshadow, /etc/master.passwd) and
+        k8s.ns.name in (service-1, service-2, service-3)
+      output: >
+        Sensitive file read in app container
+        (user=%user.name file=%fd.name command=%proc.cmdline
+         container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [filesystem, credential_access, mitre_credential_access, T-RT-02]
+
+    # THREAT: Credential access via process environment
+    # MITIGATES: T-RT-02
+    - rule: Proc Environ Read in App Container
+      desc: Detects reads of /proc/*/environ (env variable leakage)
+      condition: >
+        open_read and
+        fd.name glob "/proc/*/environ" and
+        k8s.ns.name in (service-1, service-2, service-3)
+      output: >
+        /proc/*/environ read in app container
+        (user=%user.name file=%fd.name command=%proc.cmdline
+         container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [filesystem, credential_access, T-RT-02]
+
+    # THREAT: Persistence via filesystem write in read-only container
+    # MITIGATES: T-RT-03 (Persistence / tamper with read-only filesystem)
+    - rule: Write Attempt on Read-Only Filesystem
+      desc: >
+        Detects write syscalls in containers with readOnlyRootFilesystem=true.
+        Legitimate writes should only go to declared emptyDir volumes (/tmp).
+      condition: >
+        open_write and
+        container and
+        not fd.name startswith /tmp and
+        not fd.name startswith /proc and
+        k8s.ns.name in (service-1, service-2, service-3)
+      output: >
+        Write attempt on read-only filesystem
+        (user=%user.name file=%fd.name command=%proc.cmdline
+         container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)
+      priority: ERROR
+      tags: [filesystem, persistence, mitre_persistence, T-RT-03]
+
+    # THREAT: Lateral movement / C2 - container connects outside the Istio mesh
+    # MITIGATES: T-NET-01 (Unexpected egress from app containers)
+    - rule: Unexpected Outbound Network Connection from App Container
+      desc: >
+        Detects outbound TCP connections from app containers to IPs outside the
+        cluster pod CIDR (10.0.0.0/8). All legitimate traffic should stay within
+        the mesh or route through the Istio sidecar. Direct external connections
+        indicate C2 communication or exfiltration.
+      condition: >
+        outbound and
+        not fd.sip.net in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16") and
+        k8s.ns.name in (service-1, service-2, service-3) and
+        not proc.name in (envoy, pilot-agent)
+      output: >
+        Unexpected outbound connection from app container
+        (user=%user.name command=%proc.cmdline
+         connection=%fd.name container=%container.name
+         ns=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [network, lateral_movement, exfiltration, mitre_command_and_control, T-NET-01]
+
+    # THREAT: Privilege escalation via metadata server
+    # MITIGATES: T-ID-01 (SSRF to GCE metadata endpoint bypassing Workload Identity)
+    - rule: GCE Metadata Server Access from App Container
+      desc: >
+        Detects HTTP connections to 169.254.169.254 (GCE metadata server) from
+        app containers. With GKE_METADATA mode, pods should use Workload Identity
+        - direct metadata server access suggests SSRF or misconfiguration.
+      condition: >
+        outbound and
+        fd.sip = "169.254.169.254" and
+        k8s.ns.name in (service-1, service-2, service-3)
+      output: >
+        GCE metadata server accessed from app container
+        (user=%user.name command=%proc.cmdline
+         container=%container.name ns=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [network, cloud_metadata, privilege_escalation, T-ID-01]

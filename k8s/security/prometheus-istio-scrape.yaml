@@ -1,0 +1,63 @@
+# Prometheus additional scrape configs for Istio
+# Applied as a ConfigMap and referenced by the Prometheus Helm release.
+# Mounted via extraScrapeConfigs in the values.yaml.
+#
+# Deploy: kubectl apply -f k8s/security/prometheus-istio-scrape.yaml
+# Then update the Prometheus Helm release to reference it.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-istio-scrape
+  namespace: istio-system
+  labels:
+    app: prometheus
+data:
+  scrape_configs.yaml: |
+    - job_name: 'istiod'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names: [istio-system]
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: istiod;http-monitoring
+      metrics_path: /metrics
+
+    # ── envoy-stats (sidecar proxies - data plane) ──────────────────────────
+    # Scrapes the Prometheus metrics port (15090) on every Envoy sidecar
+    - job_name: 'envoy-stats'
+      metrics_path: /stats/prometheus
+      kubernetes_sd_configs:
+        - role: pod
+      relabel_configs:
+        # Only pods with the Istio sidecar injected
+        - source_labels: [__meta_kubernetes_pod_container_name]
+          action: keep
+          regex: istio-proxy
+        # Use the Envoy stats port
+        - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:15090
+          target_label: __address__
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - source_labels: [__meta_kubernetes_namespace]
+          action: replace
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          action: replace
+          target_label: pod_name
+
+    # ── Istio mesh federation metrics ────────────────────────────────────────
+    - job_name: 'istio-mesh'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names: [istio-system]
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: istio-telemetry;prometheus

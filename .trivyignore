@@ -1,0 +1,18 @@
+# .trivyignore
+# CVEs accepted as residual risk - each must reference THREAT_MODEL.md
+#
+# Format:
+#   CVE-XXXX-XXXXX  # <justification> | Risk: <level> | Residual: <R-XX>
+#
+# Instructions:
+#   - Add a CVE here ONLY if:
+#     1. No fix is available upstream
+#     2. The vulnerability is not exploitable in our deployment context
+#     3. It has been reviewed and approved
+#   - Each entry must have a comment with justification
+#
+# Currently empty - distroless:nonroot has no known CRITICAL CVEs at time of writing.
+# If Trivy reports a CRITICAL with no fix available, add it here with justification.
+#
+# Example (DO NOT uncomment without review):
+# CVE-2023-XXXXX  # No fix available in distroless as of YYYY-MM-DD | Risk: CRITICAL | Residual: R-01
