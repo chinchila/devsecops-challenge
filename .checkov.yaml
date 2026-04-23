@@ -26,3 +26,5 @@ skip-check:
   # Justification: Already enabled via shielded_instance_config in gke/main.tf.
   # Checkov has a false positive for this check on Terraform google-beta provider.
   - CKV_GCP_68
+  # This is a false positive, metadata is enabled in the node pool
+  - CKV_GCP_69

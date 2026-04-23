@@ -137,9 +137,6 @@ resource "google_container_cluster" "primary" {
     disk_type    = "pd-standard"   # standard HDD - not counted against pd-ssd quota
     disk_size_gb = 30
     machine_type = "e2-medium"
-    workload_metadata_config {
-      node_metadata = "GKE_METADATA_SERVER"
-    }
   }
 
   network    = google_compute_network.vpc.id
@@ -153,7 +150,7 @@ resource "google_container_cluster" "primary" {
   resource_labels = {
     environment = "production"
     team        = "security"
-    managedBy   = "terraform"
+    managedby   = "terraform"
   }
 
   # Private cluster - nodes have no public IPs
