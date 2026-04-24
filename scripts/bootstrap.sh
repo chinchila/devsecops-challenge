@@ -28,10 +28,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-step()    { echo -e "\n${BLUE}▶ STEP $*${NC}"; }
-info()    { echo -e "  ${GREEN}✓${NC} $*"; }
-warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
-die()     { echo -e "  ${RED}✗ ERROR:${NC} $*"; exit 1; }
+step()    { echo -e "\n${BLUE}STEP $*${NC}"; }
+info()    { echo -e "  ${GREEN}${NC} $*"; }
+warn()    { echo -e "  ${YELLOW}${NC} $*"; }
+die()     { echo -e "  ${RED}ERROR:${NC} $*"; exit 1; }
 
 step "0 - Validate required tools"
 for tool in gcloud terraform kubectl helm cosign htpasswd openssl curl; do

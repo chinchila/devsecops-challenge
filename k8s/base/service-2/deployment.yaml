@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: service-2
-          image: ghcr.io/chinchila/devsecops-challenge@sha256:96a3c494f8ac61d0a0d73ea6b67d0a6e3444de78
+          image: ghcr.io/chinchila/devsecops-challenge@sha256:7b050117a8b024cf2ac4d935f9b5e25e0e2b5afeeb4d063675ef1fb95a9e9d2d
           env:
             - name: SERVICE
               value: "service-2"

@@ -60,11 +60,12 @@ metadata:
   labels:
     app: $POD
     demo: falco
+    sidecar.istio.io/inject: "false"
   annotations:
     # Bypass PSS for this demo pod only - it needs a shell to trigger Falco
     pod-security.kubernetes.io/enforce-version: latest
+    proxy.istio.io/config: '{ "holdApplicationUntilProxyReceivesConfig": true }'
 spec:
-  # Override PSS restricted for demo purposes only
   securityContext:
     runAsUser: 65532
     runAsNonRoot: true
@@ -73,7 +74,7 @@ spec:
   containers:
     - name: $POD
       image: alpine:3.19
-      command: ["sleep", "120"]
+      command: ["sleep", "300"]
       securityContext:
         runAsUser: 65532
         runAsNonRoot: true
@@ -88,7 +89,7 @@ spec:
 EOF
 
 info "Waiting for demo pod to be Ready..."
-kubectl wait --for=condition=Ready pod/$POD -n "$NS" --timeout=60s
+kubectl wait --for=condition=Ready pod/$POD -n "$NS" --timeout=300s
 info "Demo pod is ready"
 
 # Give Falco a moment to register the new container
@@ -119,7 +120,7 @@ section "Falco Alert Output"
 info "Fetching Falco logs since $START_TIME..."
 echo ""
 
-ALERTS=$(kubectl logs -n "$FALCO_NS" "$FALCO_POD" \
+ALERTS=$(kubectl logs -n "$FALCO_NS" -l app.kubernetes.io/name=falco \
   --since-time="$START_TIME" 2>/dev/null | \
   grep -E '"rule":"(Shell Executed in App Container|Sensitive File Read in App Container)"' \
   || true)
