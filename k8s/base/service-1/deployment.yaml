@@ -41,7 +41,7 @@ spec:
 
       containers:
         - name: service-1
-          image: ghcr.io/chinchila/devsecops-challenge@sha256:7b050117a8b024cf2ac4d935f9b5e25e0e2b5afeeb4d063675ef1fb95a9e9d2d
+          image: ghcr.io/chinchila/devsecops-challenge:20a03201c20bcff8e5dae86da183f7a467f2b521 
           env:
             - name: SERVICE
               value: "service-1"
