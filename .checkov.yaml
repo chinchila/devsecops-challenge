@@ -32,6 +32,9 @@ skip-check:
   # the risk is very low in this case and under very specific configurations
   # its different then mounting the secret as file.
   - CKV_K8S_35
+  # This tells us to use digest instead of tags, if we make immutable releases
+  # the tags will be immutable therefore this makes a risk documentation on R-09
+  - CKV_K8S_43
 
 skip-path:
   - k8s/security/kube-bench-job.yaml
