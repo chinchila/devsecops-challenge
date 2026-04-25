@@ -1,6 +1,6 @@
 # Istio security policies
 # Layer: L7 (complements NetworkPolicy at L3/L4)
-
+# k8s/security/istio-policies.yaml
 ---
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
@@ -11,45 +11,24 @@ spec:
   mtls:
     mode: STRICT
 
+# Deny no authorization header
 ---
 apiVersion: security.istio.io/v1beta1
-kind: RequestAuthentication
+kind: AuthorizationPolicy
 metadata:
-  name: jwt-auth-service-1
+  name: deny-no-token
   namespace: service-1
 spec:
   selector:
     matchLabels:
       app: service-1
-  jwtRules:
-    - issuer: "https://accounts.google.com" # Replace with your actual issuer
-      jwksUri: "https://www.googleapis.com/oauth2/v3/certs"
-      forwardOriginalToken: false
----
-apiVersion: security.istio.io/v1beta1
-kind: RequestAuthentication
-metadata:
-  name: jwt-auth-service-3
-  namespace: service-3
-spec:
-  selector:
-    matchLabels:
-      app: service-3
-  jwtRules:
-    - issuer: "https://accounts.google.com"   # Replace with your actual issuer
-      jwksUri: "https://www.googleapis.com/oauth2/v3/certs"
-      forwardOriginalToken: false
+  action: DENY
+  rules:
+    - when:
+        - key: request.headers[authorization]
+          notValues: ["*"]
 
 ---
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
-  name: deny-all
-  namespace: istio-system
-spec: {}  # Empty spec = deny all in the root namespace
-
----
-# service-1: allow ingress from gateway (JWT must be valid)
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -63,13 +42,13 @@ spec:
   rules:
     - from:
         - source:
-            principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway"]
+            principals: ["*"]
       when:
-        - key: request.auth.claims[iss]
-          values: ["https://accounts.google.com"]
+        - key: request.headers[authorization]
+          values: ["*"]
+
 
 ---
-# service-2: allow only service-1 (mTLS principal check at L7)
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -88,9 +67,22 @@ spec:
         - operation:
             methods: ["GET"]
             paths: ["/"]
-
 ---
-# service-3: allow ingress from gateway (JWT must be valid); deny service-1 and service-2
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-no-token
+  namespace: service-3
+spec:
+  selector:
+    matchLabels:
+      app: service-3
+  action: DENY
+  rules:
+    - when:
+        - key: request.headers[authorization]
+          notValues: ["*"]
+---
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
@@ -104,13 +96,11 @@ spec:
   rules:
     - from:
         - source:
-            principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway"]
+            principals: ["*"]
       when:
-        - key: request.auth.claims[iss]
-          values: ["https://accounts.google.com"]
-
+        - key: request.headers[authorization]
+          values: ["*"]
 ---
-# Explicitly DENY service-1 and service-2 from reaching service-3 (defense in depth)
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
