@@ -197,6 +197,7 @@ Verificação manual dos pontos 4.x:
 | 4.2.7 NET_RAW dropped | ✓ | `drop: [ALL]` covers NET_RAW |
 | 4.2.8 no added capabilities | ✓ | No `capabilities.add` on app containers |
 | 4.2.9 capabilities dropped | ✓ | `drop: [ALL]` on all app containers |
+| 4.3.1 CNI supports NetworkPolicy | ADVANCED_DATAPATH suporta isso | usa cillium |
 | 4.3.2 NetworkPolicies defined | ✓ | Todos os namespaces de serviço tem default-deny + allowlist |
 | 4.4.2 external secret storage | ✓ | Infisical |
 | 4.6.1 namespaces used | ✓ | service-1/2/3, infisical, argocd, falco, istio-system |
@@ -209,10 +210,9 @@ Verificação manual dos pontos 4.x:
 | 4.1.1 cluster-admin usage | Precisa fazer audit do RBAC no cluster (ex usar kubescape) | Remover RBAC de cluster-admin quando não precisar |
 | 4.1.2 minimize secret access | Usamos SA padrão nos namespaces infisical/argocd/falco | Usar SAs específicas ou mudar o comportamento das padrões |
 | 4.1.3 no wildcards in RBAC | Projetos do Argo CD tem `namespace: "*"` | Deveriamos restringir namespaces específicos |
-| 4.1.4 minimize pod create | rotation job SA can create pods | Tighten rotation RBAC |
-| 4.3.1 CNI supports NetworkPolicy | Need to document ADVANCED_DATAPATH supports it | Document |
-| 4.4.1 secrets as files not env vars | JWT_SECRET is env var | Add volume mount alternative |
-| 4.5.1 ImagePolicyWebhook | Not implemented | Document as residual risk (Binary Authorization gap) |
+| 4.1.4 minimize pod create | não sei, talvez relacionado aos Jobs que a gente cria | Melhroar RBAC? |
+| 4.4.1 secrets as files not env vars | JWT_SECRET é variável de ambiente | Adicionar volume e um arquivo com o valor dele |
+| 4.5.1 ImagePolicyWebhook | Not implemented | Implementar Binary Authorization |
 
 
 Verificação manual dos pontos 5.x:
@@ -248,7 +248,7 @@ Verificação manual dos pontos 5.x:
 | 5.10.2 Alpha clusters não em produção | `enable_kubernetes_alpha = false` | `infra/modules/gke/main.tf` |
 | 5.10.3 Pod Security Policy | Substituído por PSS (PSP foi removido no K8s 1.25+) | Namespace labels PSS |
 
-**Opcionais (tem opção no TF)**
+**Opcionais (tem opção no terraform)**
 
 | Check | Controle | Como habilitar |
 |---|---|---|

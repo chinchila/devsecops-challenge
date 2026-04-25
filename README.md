@@ -246,15 +246,19 @@ docker push ghcr.io/chinchila/devsecops-challenge:latest
 
 ```bash
 # Pega o ip externo
-kubectl get svc istio-ingressgateway -n istio-system
+EXTERNAL_IP=$(kubectl get svc -n istio-system istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
 # Testa service-1
-curl -k https://<EXTERNAL-IP>/ \
-  -H "Host: service-1.example.com"
-
+curl -k "https://${EXTERNAL_IP}/" -H "Host: service-1.example.com" -H "Authorization: jwt"
+# Esperado: {"service":"1"}
 # Testa service-3
-curl -k https://<EXTERNAL-IP>/ \
-  -H "Host: service-3.example.com"
+curl -k "https://${EXTERNAL_IP}/" -H "Host: service-3.example.com" -H "Authorization: jwt"
+# Esperado: {"service":"3"}
+# Testa service-2
+curl -k "https://${EXTERNAL_IP}/" -H "Host: service-2.example.com" -H "Authorization: jwt" -vv
+# Esperado: 404
+curl -k "https://${EXTERNAL_IP}/upstream" -H "Host: service-1.example.com" -H "Authorization: jwt"
+# Esperado: {"service":"2"}
 ```
 
 ---
@@ -281,19 +285,7 @@ trivy image --severity CRITICAL --exit-code 1 test-prod
 
 ### Rede e Istio
 
-```bash
-# Verificar mTLS STRICT ativo
-istioctl x describe pod -n service-1 $(kubectl get pod -n service-1 -o name | head -1)
-
-# Testar bloqueio lateral: service-1 NÃO deve conseguir chamar service-3
-kubectl run curl-test -n service-1 --image=curlimages/curl -it --rm -- sh
-
-# esperar o pod subir e rodar
-curl http://service-3.service-3.svc.cluster.local:8080/
-# Esperado: Connection refused ou RBAC error
-curl http://service-2.service-2.svc.cluster.local:8080/
-# Esperado: {"service":"2"}
-```
+Sinceramente pra testar isso vai dar um trabalhinho, se a gente criar um pod ele nao vai subir por causa do istio, se a gente adiciona a label sem o sidecar do istio ele vai subir com default deny e não vai resolver os DNS. Se a gente usar IP direto vai dar timeout. Então não tem como testar eu acho... Podemos discutir na entrevista, mas uma opção talvez seja Helium ou usar kiali.
 
 ### Runtime hardening
 
@@ -383,3 +375,5 @@ kubectl get deploy/service-1 -n service-1 --watch
 * Implementar Rotação de segredos do infisical e chave cosign (da um trabalhão)
 * Implementar políticas de RBAC para quem tem acesso ao cluster, mesmo com argocd tem como alguem com muitas permissões chegar e deletar o argocd por exemplo.
 * Usar uma credencial para o infiiscal por serviço.
+* terraform destroy não destói tudo... :(
+
