@@ -1,54 +1,176 @@
-# Source: https://github.com/GoogleCloudPlatform/k8s-node-tools/tree/master/os-audit
+# Source: https://raw.githubusercontent.com/GoogleCloudPlatform/k8s-node-tools/refs/heads/master/troubleshooting/os-audit/cos-auditd-logging.yaml
 #
 # Deploy: kubectl apply -f k8s/security/cos-auditd-logging.yaml
 # Verify: kubectl get pods -n cos-auditd
----
 apiVersion: v1
 kind: Namespace
 metadata:
   name: cos-auditd
-  labels:
-    # Auditd runs on node and needs privileged
-    pod-security.kubernetes.io/enforce: privileged
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: auditd
+  name: cos-auditd-logging
   namespace: cos-auditd
+  annotations:
+    kubernetes.io/description: 'DaemonSet that enables Linux auditd logging on non-Autopilot COS nodes.'
 spec:
   selector:
     matchLabels:
-      name: auditd
+      name: cos-auditd-logging
   template:
     metadata:
       labels:
-        name: auditd
+        name: cos-auditd-logging
     spec:
-      tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
+      # Necessary for ensuring access to Google Cloud credentials from the node's metadata server.
+      hostNetwork: true
       hostPID: true
-      hostIPC: true
-
+      dnsPolicy: Default
+      initContainers:
+      - name: cos-auditd-setup
+        image: gke.gcr.io/gke-distroless/bash@sha256:242f1f9cef1af0bdd52500dd55965e0dfb9605ba6254be308c95fb70bba6b111
+        command:
+          - /bin/bash
+          - -c
+          - "chroot /host systemctl enable --now cloud-audit-setup.service"
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host
+          mountPath: /host
+        resources:
+          requests:
+            memory: "10Mi"
+            cpu: "10m"
       containers:
-        - name: auditd
-          securityContext:
-            privileged: true
-            capabilities:
-              add:
-                - CAP_AUDIT_CONTROL
-                - CAP_AUDIT_READ
-                - CAP_AUDIT_WRITE
-                - CAP_SYS_NICE
-          image: ghcr.io/appvia/auditd-container@sha256:55d989385e70244d2235b61211426ae045c4febc90440fb317416adf95e2572b
-          # args: ['sh', '-c', 'apk add --no-cache audit && auditd -n']
-          volumeMounts:
-          - mountPath: /var/log/audit
-            name: auditlog
+      - name: cos-auditd-fluent-bit
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - all
+            add:
+            - DAC_OVERRIDE
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        # Substitute these (manually or via envsubst). For example, run
+        # `CLUSTER_NAME=example-cluster CLUSTER_LOCATION=us-central1-a envsubst '$CLUSTER_NAME,$CLUSTER_LOCATION' < ${THIS_FILE:?} | kubectl apply -f -`
+        - name: CLUSTER_NAME
+          value: "$CLUSTER_NAME"
+        - name: CLUSTER_LOCATION
+          value: "$CLUSTER_LOCATION"
+        # This image is used for demo purposes. The best practice is to use the image from controlled registry and reference it by SHA.
+        image: fluent/fluent-bit@sha256:ed82cb1f929b6f5a11c70d34e417e8ae25f130f7cc467460b718a946df84d562
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 2024
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          timeoutSeconds: 5
+        ports:
+        - name: metrics
+          containerPort: 2024
+        resources:
+          limits:
+            cpu: "1"
+            memory: 500Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/log
+          name: varlog
+        - mountPath: /var/lib/cos-auditd-fluent-bit/pos-files
+          name: varlib-cos-auditd-fluent-bit-pos-files
+        - mountPath: /fluent-bit/etc
+          name: config-volume
+      nodeSelector:
+        cloud.google.com/gke-os-distribution: cos
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 120
+      tolerations:
+      - operator: "Exists"
+        effect: "NoExecute"
+      - operator: "Exists"
+        effect: "NoSchedule"
       volumes:
-      - hostPath:
-          path: /var/log/audit
+      - name: host
+        hostPath:
+          path: /
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibcos-auditd-fluent-bit
+        hostPath:
+          path: /var/lib/cos-auditd-fluent-bit
           type: DirectoryOrCreate
-        name: auditlog
+      - name: varlib-cos-auditd-fluent-bit-pos-files
+        hostPath:
+          path: /var/lib/cos-auditd-fluent-bit/pos-files
+          type: DirectoryOrCreate
+      - name: config-volume
+        configMap:
+          name: cos-auditd-fluent-bit-config
+  updateStrategy:
+    type: RollingUpdate
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cos-auditd-fluent-bit-config
+  namespace: cos-auditd
+  annotations:
+    kubernetes.io/description: 'ConfigMap for Linux auditd logging daemonset on COS nodes.'
+data:
+  fluent-bit.conf: |-
+    [SERVICE]
+        Flush         5
+        Grace         120
+        Log_Level     info
+        Daemon        off
+        HTTP_Server   On
+        HTTP_Listen   0.0.0.0
+        HTTP_PORT     2024
+
+    [INPUT]
+        # https://docs.fluentbit.io/manual/input/systemd
+        Name            systemd
+        Alias           audit
+        Tag             audit
+        Systemd_Filter  SYSLOG_IDENTIFIER=audit
+        Path            /var/log/journal
+        DB              /var/lib/cos-auditd-fluent-bit/pos-files/audit.db
+
+    [FILTER]
+        # https://docs.fluentbit.io/manual/pipeline/filters/modify
+        Name                modify
+        Match               audit
+        Add                 logging.googleapis.com/local_resource_id k8s_node.${NODE_NAME}
+
+    [FILTER]
+        Name           modify
+        Match          audit
+        Add            logging.googleapis.com/logName linux-auditd
+
+    [OUTPUT]
+        # https://docs.fluentbit.io/manual/pipeline/outputs/stackdriver
+        Name                      stackdriver
+        Match                     audit
+        Severity_key              severity
+        log_name_key              logging.googleapis.com/logName
+        Resource                  k8s_node
+        # The plugin will read the project ID from the metadata server, but not the cluster name and location for some reason, so they have to be injected.
+        k8s_cluster_name          ${CLUSTER_NAME}
+        k8s_cluster_location      ${CLUSTER_LOCATION}
+        net.connect_timeout       60
+        Retry_Limit               14
+        Workers                   1
