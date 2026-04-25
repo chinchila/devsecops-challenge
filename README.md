@@ -168,7 +168,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -subj "/CN=devsecops-challenge/O=devsecops"
 
 # Joga no cluster
-kubectl create secret tls ingress-tls \
+kubectl create secret tls app-tls \
   --cert=tls.crt \
   --key=tls.key \
   --namespace=istio-system
@@ -189,6 +189,7 @@ kubectl port-forward svc/infisical-infisical-standalone-infisical -n infisical 8
 # Antes de prosseguir, tenha certeza que o project-slug é devsecops-challenge
 # Verifique se a machine identity tem a permissão de describe e read no projeto
 # Recomendado: setar a permissão específica apenas para o JWT_SECRET
+# Verifique se o secret foi realmente criado em prod, não em dev
 
 # Crie os secrets de autenticação do Infisical em cada namespace
 for ns in service-1 service-2 service-3; do
@@ -381,3 +382,4 @@ kubectl get deploy/service-1 -n service-1 --watch
 * Rever RBAC das aplicações e daemonsets (falco, argocd, istio)
 * Implementar Rotação de segredos do infisical e chave cosign (da um trabalhão)
 * Implementar políticas de RBAC para quem tem acesso ao cluster, mesmo com argocd tem como alguem com muitas permissões chegar e deletar o argocd por exemplo.
+* Usar uma credencial para o infiiscal por serviço.
