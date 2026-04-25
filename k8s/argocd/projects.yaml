@@ -86,6 +86,11 @@ spec:
       kind: AuthorizationPolicy
     - group: "security.istio.io"
       kind: RequestAuthentication
+# para admission policies
+#    - group: "admissionregistration.k8s.io"
+#      kind: ValidatingAdmissionPolicy
+#    - group: "admissionregistration.k8s.io"
+#      kind: ValidatingAdmissionPolicyBinding
 
   namespaceResourceWhitelist:
     - group: "networking.k8s.io"

@@ -172,6 +172,9 @@ kubectl port-forward svc/infisical-infisical-standalone-infisical -n infisical 8
 # 3. Adicione a variável JWT_SECRET no ambiente "prod"
 # 4. Crie uma Machine Identity com acesso de leitura ao projeto
 # 5. Copie o clientId e clientSecret, recomendado: salvar 
+# Antes de prosseguir, tenha certeza que o project-slug é devsecops-challenge
+# Verifique se a machine identity tem a permissão de describe e read no projeto
+# Recomendado: setar a permissão específica apenas para o JWT_SECRET
 
 # Crie os secrets de autenticação do Infisical em cada namespace
 for ns in service-1 service-2 service-3; do
@@ -233,7 +236,7 @@ docker push ghcr.io/chinchila/devsecops-challenge:latest
 ```bash
 # Verificar assinatura Cosign
 cosign verify --key cosign.pub \
-  ghcr.io/<seu-org>/devsecops-challenge:<sha>
+  ghcr.io/chinchila/devsecops-challenge:<sha>
 
 # Verificar que insecure.Dockerfile tem CVEs críticos
 docker build -f insecure.Dockerfile -t test-insecure .
@@ -343,3 +346,10 @@ kubectl get deploy/service-1 -n service-1 --watch
 **Falco como prevention (não só detection):** Falco não tem capacidade de bloquear syscalls nativamente (isso é domínio do seccomp/AppArmor). A combinação PSS + NetworkPolicy + Falco fornece prevenção (PSS/NetPol) + detecção (Falco). Runtime prevention completa exigiria eBPF LSM ou AppArmor profiles customizados.
 
 **Multi-tenancy no Argo CD:** Uma única instância de Argo CD gerencia todos os namespaces. Em produção com múltiplos times, considerar Argo CD Projects com RBAC granular ou instâncias separadas.
+
+## Melhorias e trabalhos futuros
+
+* Implementar políticas de admissão (veja k8s/extra/ para políticas usando a engine padrão do k8s), minha experiência passada: Kyverno
+* Rever RBAC das aplicações e daemonsets (falco, argocd, istio)
+* Implementar 
+
