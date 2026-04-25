@@ -3,7 +3,6 @@
 # service-2 is internal only - no Gateway entry.
 
 ---
-# ── Gateway: TLS termination at the ingress ──────────────────────────────────
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
@@ -39,7 +38,6 @@ spec:
         - "service-3.example.com"
 
 ---
-# ── VirtualService: route to service-1 ───────────────────────────────────────
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
@@ -66,7 +64,6 @@ spec:
         retryOn: "5xx,reset,connect-failure"
 
 ---
-# ── VirtualService: route to service-3 ───────────────────────────────────────
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
@@ -93,7 +90,6 @@ spec:
         retryOn: "5xx,reset,connect-failure"
 
 ---
-# ── DestinationRule: enforce mTLS for each service ───────────────────────────
 # Even with global PeerAuthentication STRICT, DestinationRules make the
 # client-side mTLS explicit and allow per-service circuit breaker config.
 apiVersion: networking.istio.io/v1beta1

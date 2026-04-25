@@ -157,10 +157,21 @@ terraform apply \
   -var="infisical_auth_secret=${INFISICAL_JWT_SECRET}"
 ```
 
-### 5. Configure kubeconfig
+### 5. Configure kubeconfig e o tls
 
 ```bash
 $(terraform output -raw kubeconfig_command)
+# Gere o certificado self-signed
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout tls.key \
+  -out tls.crt \
+  -subj "/CN=devsecops-challenge/O=devsecops"
+
+# Joga no cluster
+kubectl create secret tls ingress-tls \
+  --cert=tls.crt \
+  --key=tls.key \
+  --namespace=istio-system
 ```
 
 ### 6. Configure o Infisical
@@ -230,6 +241,21 @@ docker push ghcr.io/chinchila/devsecops-challenge:latest
 # Atualize as tags nos manifestos e faça commit → Argo CD sincroniza
 ```
 
+### 10. Teste o ingress
+
+```bash
+# Pega o ip externo
+kubectl get svc istio-ingressgateway -n istio-system
+
+# Testa service-1
+curl -k https://<EXTERNAL-IP>/ \
+  -H "Host: service-1.example.com"
+
+# Testa service-3
+curl -k https://<EXTERNAL-IP>/ \
+  -H "Host: service-3.example.com"
+```
+
 ---
 
 ## Validação de segurança
@@ -259,13 +285,12 @@ trivy image --severity CRITICAL --exit-code 1 test-prod
 istioctl x describe pod -n service-1 $(kubectl get pod -n service-1 -o name | head -1)
 
 # Testar bloqueio lateral: service-1 NÃO deve conseguir chamar service-3
-kubectl exec -n service-1 deploy/service-1 -c service-1 -- \
-  wget -qO- http://service-3.service-3.svc.cluster.local:8080/ 2>&1
-# Esperado: Connection refused ou RBAC error
+kubectl run curl-test -n service-1 --image=curlimages/curl -it --rm -- sh
 
-# Testar caminho permitido: service-1 -> service-2
-kubectl exec -n service-1 deploy/service-1 -c service-1 -- \
-  wget -qO- http://service-2.service-2.svc.cluster.local:8080/
+# esperar o pod subir e rodar
+curl http://service-3.service-3.svc.cluster.local:8080/
+# Esperado: Connection refused ou RBAC error
+curl http://service-2.service-2.svc.cluster.local:8080/
 # Esperado: {"service":"2"}
 ```
 
@@ -356,4 +381,3 @@ kubectl get deploy/service-1 -n service-1 --watch
 * Rever RBAC das aplicações e daemonsets (falco, argocd, istio)
 * Implementar Rotação de segredos do infisical e chave cosign (da um trabalhão)
 * Implementar políticas de RBAC para quem tem acesso ao cluster, mesmo com argocd tem como alguem com muitas permissões chegar e deletar o argocd por exemplo.
-
