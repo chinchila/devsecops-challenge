@@ -85,7 +85,8 @@ GKE Standard com `ADVANCED_DATAPATH` (eBPF/Cilium) pode ter conflitos com o driv
 git clone https://github.com/Chinchila/devsecops-challenge
 cd devsecops-challenge
 
-sed -i 's|Chinchila|<seu user github>|g' k8s/argocd/applications.yaml
+# Se quiser reproduzir com outro repo precisa trocar todos os chinchilas...
+# sed -i 's|Chinchila|<seu user github>|g' k8s/argocd/applications.yaml
 ```
 
 ### 1. Crie o bucket de estado do Terraform
@@ -147,7 +148,7 @@ terraform apply \
   -var="project_id=${PROJECT_ID}" \
   -var="region=${REGION}" \
   -var="master_authorized_cidr=${MY_IP}" \
-  -var="image_registry=ghcr.io/<seu-org>/devsecops-challenge" \
+  -var="image_registry=ghcr.io/chinchila/devsecops-challenge" \
   -var="argocd_admin_password_bcrypt=${ARGOCD_HASH}" \
   -var="infisical_db_password=${INFISICAL_PASS}" \
   -var="infisical_encryption_key=${INFISICAL_ENCRYPTION_KEY}" \

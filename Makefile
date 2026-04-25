@@ -1,6 +1,6 @@
 REGISTRY        ?= ghcr.io/chinchila/devsecops-challenge
 IMAGE_TAG       ?= latest
-PROJECT_ID      ?= project-cf552c1b-c545-4def-811
+PROJECT_ID      ?= a
 REGION          ?= us-central1
 CLUSTER_NAME    ?= devsecops-challenge
 TF_BUCKET       ?= $(PROJECT_ID)-tf-state
