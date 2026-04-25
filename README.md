@@ -111,7 +111,9 @@ cosign generate-key-pair
 # COSIGN_PRIVATE_KEY = $(cat cosign.key)
 # COSIGN_PUBLIC_KEY  = $(cat cosign.pub)
 # COSIGN_PASSWORD    = <senha escolhida>
-
+# Faça upload no infisical em /ci/cosign.key
+# Opcional: fazer um script que joga a chave privada no
+# github e assina todas as imagens, no caso de secret rotation
 echo "cosign.key" >> .gitignore
 ```
 
@@ -352,5 +354,6 @@ kubectl get deploy/service-1 -n service-1 --watch
 
 * Implementar políticas de admissão (veja k8s/extra/ para políticas usando a engine padrão do k8s), minha experiência passada: Kyverno
 * Rever RBAC das aplicações e daemonsets (falco, argocd, istio)
-* Implementar 
+* Implementar Rotação de segredos do infisical e chave cosign (da um trabalhão)
+* Implementar políticas de RBAC para quem tem acesso ao cluster, mesmo com argocd tem como alguem com muitas permissões chegar e deletar o argocd por exemplo.
 
