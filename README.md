@@ -133,8 +133,11 @@ cd infra
 # 0.0.0.0/0 ou os ips de saída da VPN se usar
 MY_IP=$(curl -s ifconfig.me)/32
 INFISICAL_PASS=$(openssl rand -base64 24)
-
-echo "Guarde esta senha em um password manager: ${INFISICAL_PASS}"
+INFISICAL_ENCRYPTION_KEY=$(openssl rand -hex 16)
+INFISICAL_JWT_SECRET=$(openssl rand -base64 32)
+echo "Guarde esta senha em um password manager: senha admin infisical: ${INFISICAL_PASS}"
+echo "Guarde esta senha em um password manager: jwt secret infisical: ${INFISICAL_ENCRYPTION_KEY}"
+echo "Guarde esta senha em um password manager: encryption key infisical: ${INFISICAL_JWT_SECRET}"
 
 terraform init \
   -backend-config="bucket=${TF_BUCKET}" \
@@ -146,7 +149,9 @@ terraform apply \
   -var="master_authorized_cidr=${MY_IP}" \
   -var="image_registry=ghcr.io/<seu-org>/devsecops-challenge" \
   -var="argocd_admin_password_bcrypt=${ARGOCD_HASH}" \
-  -var="infisical_db_password=${INFISICAL_PASS}"
+  -var="infisical_db_password=${INFISICAL_PASS}" \
+  -var="infisical_encryption_key=${INFISICAL_ENCRYPTION_KEY}" \
+  -var="infisical_auth_secret=${INFISICAL_JWT_SECRET}"
 ```
 
 ### 5. Configure kubeconfig

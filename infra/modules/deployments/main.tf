@@ -43,7 +43,7 @@ resource "kubernetes_secret" "infisical_secrets" {
   type = "Opaque"
   lifecycle {
     ignore_changes  = all
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 

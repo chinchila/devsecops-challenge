@@ -313,7 +313,7 @@ resource "google_kms_crypto_key" "gke_secrets" {
   rotation_period = "7776000s" # 90 dias
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
