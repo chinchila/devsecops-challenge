@@ -42,7 +42,7 @@ spec:
                 - CAP_AUDIT_READ
                 - CAP_AUDIT_WRITE
                 - CAP_SYS_NICE
-          image: ghcr.io/appvia/auditd-container:latest
+          image: ghcr.io/appvia/auditd-container@sha256:55d989385e70244d2235b61211426ae045c4febc90440fb317416adf95e2572b
           # args: ['sh', '-c', 'apk add --no-cache audit && auditd -n']
           volumeMounts:
           - mountPath: /var/log/audit
