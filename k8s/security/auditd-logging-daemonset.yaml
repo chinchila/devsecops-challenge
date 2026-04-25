@@ -15,13 +15,13 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: auditd
+  namespace: cos-auditd
 spec:
   selector:
     matchLabels:
       name: auditd
   template:
     metadata:
-      namespace: cos-auditd
       labels:
         name: auditd
     spec:
