@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: service-2
-          image: ghcr.io/chinchila/devsecops-challenge:5989ad095a0de7002aa86bd8a635b8c5045de8a2
+          image: ghcr.io/chinchila/devsecops-challenge:9ff034bba782279e78c451587dee97e9357b6d4d
           imagePullPolicy: Always
           env:
             - name: SERVICE
