@@ -78,3 +78,9 @@ variable "infisical_auth_secret" {
   type        = string
   sensitive   = true
 }
+
+variable "create_kms_key" {
+  description = "Create a KMS to rotate the disk secrets. Increase bills by ~$1/month."
+  type        = bool
+  default     = false
+}

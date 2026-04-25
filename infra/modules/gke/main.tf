@@ -214,6 +214,20 @@ resource "google_container_cluster" "primary" {
     evaluation_mode = "DISABLED"
   }
 
+  # KubeBench 5.3.1 - Criptografia de Secrets com Cloud KMS (Application-layer Secrets Encryption)
+  # Criptografa etcd secrets em repouso com chave gerenciada pelo operador.
+  # Opcional: só habilitado se var.kms_key_id for fornecido.
+  dynamic "database_encryption" {
+    for_each = var.create_kms_key ? [1] : []
+    content {
+      state    = "ENCRYPTED"
+      key_name = google_kms_crypto_key.gke_secrets[0].id
+    }
+  }
+
+  # KubeBench 5.10.2 - Disable alpha features
+  enable_kubernetes_alpha = false
+
   lifecycle {
     ignore_changes = [
       initial_node_count,
@@ -243,6 +257,11 @@ resource "google_container_node_pool" "primary" {
     machine_type = var.node_pool_machine_type
     disk_type    = "pd-standard"
     disk_size_gb = 30
+    
+    # KubeBench 5.5.1 - COS_CONTAINERD: Container-Optimized OS com containerd
+    # Menor superfície de ataque vs Ubuntu; sem apt, ssh desabilitado por padrão
+    image_type = "COS_CONTAINERD"
+    boot_disk_kms_key = var.create_kms_key ? google_kms_crypto_key.gke_secrets[0].id : null
 
     # Workload Identity per node
     workload_metadata_config {
@@ -278,3 +297,31 @@ resource "google_container_node_pool" "primary" {
     max_unavailable = 0
   }
 }
+
+
+resource "google_kms_key_ring" "gke" {
+  count    = var.create_kms_key ? 1 : 0
+  project  = var.project_id
+  name     = "${var.cluster_name}-keyring"
+  location = var.region
+}
+
+resource "google_kms_crypto_key" "gke_secrets" {
+  count           = var.create_kms_key ? 1 : 0
+  name            = "${var.cluster_name}-secrets-key"
+  key_ring        = google_kms_key_ring.gke[0].id
+  rotation_period = "7776000s" # 90 dias
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Permission from GKE to use KMS
+resource "google_kms_crypto_key_iam_member" "gke_encrypt_decrypt" {
+  count         = var.create_kms_key ? 1 : 0
+  crypto_key_id = google_kms_crypto_key.gke_secrets[0].id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:service-${var.project_number}@container-engine-robot.iam.gserviceaccount.com"
+}
+

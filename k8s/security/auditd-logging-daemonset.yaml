@@ -1,0 +1,84 @@
+# Source: https://github.com/GoogleCloudPlatform/k8s-node-tools/tree/master/os-audit
+#
+# Deploy: kubectl apply -f k8s/security/cos-auditd-logging.yaml
+# Verify: kubectl get pods -n cos-auditd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cos-auditd
+  labels:
+    # Auditd runs on node and needs privileged
+    pod-security.kubernetes.io/enforce: privileged
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cos-auditd
+  namespace: cos-auditd
+  labels:
+    app: cos-auditd
+spec:
+  selector:
+    matchLabels:
+      app: cos-auditd
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: cos-auditd
+    spec:
+      # this is necessary to configure on the node
+      hostPID: true
+      hostNetwork: true
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      initContainers:
+        - name: cos-auditd-setup
+          image: ubuntu
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Habilita auditd no COS
+              chroot /host systemctl start auditd || true
+              # Regras de auditoria focadas em segurança
+              chroot /host auditctl -w /etc/passwd -p wa -k identity
+              chroot /host auditctl -w /etc/shadow -p wa -k identity
+              chroot /host auditctl -w /etc/sudoers -p wa -k privilege
+              chroot /host auditctl -a always,exit -F arch=b64 -S execve -k exec
+              chroot /host auditctl -a always,exit -F arch=b64 -S open,openat -F exit=-EACCES -k access_denied
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host
+              mountPath: /host
+      containers:
+        - name: cos-auditd
+          image: gcr.io/google-containers/ubuntu-with-sshd:16.04
+          command:
+            - /bin/bash
+            - -c
+            - |
+              tail -f /host/var/log/audit/audit.log
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          volumeMounts:
+            - name: host
+              mountPath: /host
+              readOnly: true
+      volumes:
+        - name: host
+          hostPath:
+            path: /
+      terminationGracePeriodSeconds: 30
+  

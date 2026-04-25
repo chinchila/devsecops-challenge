@@ -8,6 +8,8 @@ module "gke" {
   node_pool_min_count    = var.node_pool_min_count
   node_pool_max_count    = var.node_pool_max_count
   master_authorized_cidr = var.master_authorized_cidr
+  project_number         = data.google_project.project.number
+  create_kms_key         = var.create_kms_key
 
   depends_on = [google_project_service.apis]
 }

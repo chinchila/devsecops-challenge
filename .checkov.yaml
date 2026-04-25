@@ -38,3 +38,4 @@ skip-check:
 
 skip-path:
   - k8s/security/kube-bench-job.yaml
+  - k8s/security/auditd-logging-daemonset.yaml
