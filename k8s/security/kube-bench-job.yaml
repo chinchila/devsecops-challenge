@@ -20,7 +20,7 @@ spec:
       hostPID: true
       containers:
         - name: kube-bench
-          image: docker.io/aquasec/kube-bench:latest
+          image: docker.io/aquasec/kube-bench@sha256:7a8fa32dce215f5920e0c9d7ae10a8e1e188993675f3ef5c4b4cbae3d342c168
           command:
             [
               "kube-bench",
