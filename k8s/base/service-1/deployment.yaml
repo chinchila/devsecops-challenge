@@ -41,7 +41,7 @@ spec:
 
       containers:
         - name: service-1
-          image: ghcr.io/chinchila/devsecops-challenge:1eedbb6f3afd0352f9901feb3259adf63e2b8996
+          image: ghcr.io/chinchila/devsecops-challenge:a791941d4397a907deaa06d4071113c3bd13764b
           imagePullPolicy: Always
           env:
             - name: SERVICE
