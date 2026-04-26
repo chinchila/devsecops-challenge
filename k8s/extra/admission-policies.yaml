@@ -1,0 +1,239 @@
+# Aqui eh soh exemplo, nao ta no cluster
+# Mitiga T-SC-02: imagem não assinada ou de registry desconhecido
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: approved-registry-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: >
+        object.spec.template.spec.containers.all(c,
+          c.image.startsWith("ghcr.io/chinchila/") ||
+          c.image.startsWith("gcr.io/distroless/") ||
+          c.image.startsWith("gcr.io/google-containers/")
+        )
+      message: "Apenas imagens dos registries aprovados são permitidas (ghcr.io/chinchila, gcr.io/distroless)"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: approved-registry-only-binding
+spec:
+  policyName: approved-registry-only
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [service-1, service-2, service-3]
+
+# Garante rastreabilidade, toda imagem deve ter digest ou tag específica
+# Mitiga T-SC-02: imagem substituída silenciosamente no registry
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: no-latest-tag
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: >
+        object.spec.template.spec.containers.all(c,
+          !c.image.endsWith(":latest") &&
+          !c.image.matches("^[^:]+$")
+        )
+      message: "Tag :latest proibida. Use uma tag imutável (SHA ou versão semântica)."
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: no-latest-tag-binding
+spec:
+  policyName: no-latest-tag
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [service-1, service-2, service-3]
+
+# Camada extra além do PSS, valida explicitamente no admission
+# Mitiga T-RT-04: container rodando como root
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: require-non-root
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: >
+        object.spec.template.spec.containers.all(c,
+          has(c.securityContext) &&
+          has(c.securityContext.runAsNonRoot) &&
+          c.securityContext.runAsNonRoot == true
+        )
+      message: "Todos os containers devem ter securityContext.runAsNonRoot: true explícito."
+      reason: Forbidden
+    - expression: >
+        !has(object.spec.template.spec.securityContext.runAsUser) ||
+        object.spec.template.spec.securityContext.runAsUser > 0
+      message: "runAsUser: 0 (root) é proibido."
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: require-non-root-binding
+spec:
+  policyName: require-non-root
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [service-1, service-2, service-3]
+
+# Mitiga T-RT-03: escrita em filesystem para persistência
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: require-readonly-rootfs
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: >
+        object.spec.template.spec.containers.all(c,
+          has(c.securityContext) &&
+          has(c.securityContext.readOnlyRootFilesystem) &&
+          c.securityContext.readOnlyRootFilesystem == true
+        )
+      message: "Todos os containers devem ter readOnlyRootFilesystem: true."
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: require-readonly-rootfs-binding
+spec:
+  policyName: require-readonly-rootfs
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [service-1, service-2, service-3]
+
+# Evita DoS interno por consumo irrestrito de CPU/memória
+# Mitiga: container comprometido consumindo recursos do node inteiro
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: require-resource-limits
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: >
+        object.spec.template.spec.containers.all(c,
+          has(c.resources) &&
+          has(c.resources.limits) &&
+          has(c.resources.limits.cpu) &&
+          has(c.resources.limits.memory)
+        )
+      message: "Todos os containers devem ter resources.limits.cpu e resources.limits.memory definidos."
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: require-resource-limits-binding
+spec:
+  policyName: require-resource-limits
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [service-1, service-2, service-3]
+
+# Mitiga T-RT-05: escape de container via namespace do host
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: no-host-namespaces
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: >
+        !has(object.spec.template.spec.hostNetwork) ||
+        object.spec.template.spec.hostNetwork == false
+      message: "hostNetwork: true é proibido nos namespaces da aplicação."
+      reason: Forbidden
+    - expression: >
+        !has(object.spec.template.spec.hostPID) ||
+        object.spec.template.spec.hostPID == false
+      message: "hostPID: true é proibido nos namespaces da aplicação."
+      reason: Forbidden
+    - expression: >
+        !has(object.spec.template.spec.hostIPC) ||
+        object.spec.template.spec.hostIPC == false
+      message: "hostIPC: true é proibido nos namespaces da aplicação."
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: no-host-namespaces-binding
+spec:
+  policyName: no-host-namespaces
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [service-1, service-2, service-3]
